@@ -1,34 +1,26 @@
 ---
 name: triage-dependabot
-description: "Triage open Dependabot PRs across Acme repos: close superseded/breaking, merge safe bumps, rebase stale ones, and report status. Use when user says 'check dependabot', 'triage deps', 'merge security updates', or run via /loop for automated maintenance."
+description: "Triage open Dependabot PRs: close superseded/breaking, merge safe bumps, rebase stale ones, and report status. Use when user says 'check dependabot', 'triage deps', 'merge security updates'."
 user_invocable: true
 argument-hint: "[repo-name] [--dry-run]"
 ---
 
 # Triage Dependabot PRs
 
-Automatically triage open Dependabot PRs: close superseded ones, merge safe bumps, rebase stale ones, and send a Slack summary.
+Automatically triage open Dependabot PRs: close superseded ones, merge safe bumps, rebase stale ones, and produce a summary report.
 
 ## Arguments
 
 Parse `$ARGUMENTS`:
-- **repo-name** (optional): specific repo to check (e.g., `acme-studio`). Default: check all Acme repos.
+- **repo-name** (optional): specific repo to check (e.g., `my-app`). Default: check all repos in the org.
 - **--dry-run**: report what would be done without taking action
-
-## Repos to Check
-
-```bash
-REPOS="acme/acme-studio acme/acme-validate acme/acme-marketing acme/acme-platform-api acme/acme-mcp-server acme/acme-infrastructure"
-```
-
-If a specific repo was passed, filter to just that one.
 
 ## Step 1: Gather Open Dependabot PRs
 
 For each repo:
 
 ```bash
-gh pr list --repo {repo} --author "dependabot[bot]" --state open \
+gh pr list --repo {owner}/{repo} --author "dependabot[bot]" --state open \
   --json number,title,mergeable,createdAt,headRefName,statusCheckRollup,labels \
   --jq '.[] | {number, title, mergeable, created: .createdAt, branch: .headRefName, labels: [.labels[].name], checks: [.statusCheckRollup[]? | {name: .name, conclusion: .conclusion}]}'
 ```
@@ -39,96 +31,56 @@ If no open PRs, skip that repo.
 
 For each PR, determine the action:
 
-### Close (superseded)
-- PR bumps a dependency to version X, but the repo already has version >= X (check the current file)
-- PR has merge conflicts AND is a minor/patch bump that dependabot can re-create
-- PR is a major version bump that requires manual migration (e.g., ESLint 8→9, React 18→19)
+| Category | Criteria | Action |
+|----------|----------|--------|
+| **Superseded** | Another open PR bumps the same package to a higher version | Close with comment |
+| **Safe bump** | Patch version, CI passing, no breaking changes | Approve + merge |
+| **Minor bump** | Minor version, CI passing | Review changelog, merge if safe |
+| **Major bump** | Major version | Flag for human review — don't auto-merge |
+| **CI failing** | Any version, CI red | Attempt rebase; if still failing, flag for human |
+| **Stale** | Open > 30 days | Rebase; if conflicts, close and let Dependabot recreate |
 
+## Step 3: Execute Actions
+
+### Close superseded PRs
 ```bash
-gh pr close {number} --repo {repo} --comment "Closed: {reason}. Dependabot will re-create if needed."
+gh pr close {number} --repo {owner}/{repo} \
+  --comment "Superseded by #{newer_pr} which bumps to a higher version."
+gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE
 ```
 
-### Merge (safe)
-- PR is mergeable (no conflicts)
-- All CI checks pass (or only pre-existing failures)
-- It's a patch/minor version bump (not major)
-- It's a security update (has `security` label)
-
+### Merge safe bumps
 ```bash
-gh pr merge {number} --repo {repo} --squash --auto
+gh pr review {number} --repo {owner}/{repo} --approve
+gh pr merge {number} --repo {owner}/{repo} --squash --delete-branch
 ```
 
-### Rebase (stale)
-- PR has merge conflicts from recent changes
-- The underlying bump is still needed
-
+### Rebase stale PRs
 ```bash
-gh pr comment {number} --repo {repo} --body "@dependabot rebase"
+gh pr comment {number} --repo {owner}/{repo} --body "@dependabot rebase"
 ```
 
-### Skip (needs review)
-- Major version bumps that might be safe but need human judgment
-- PRs with failing CI that isn't pre-existing
-- Report these for human review
+### Flag for human review
+Don't merge. Add a comment explaining why it needs human attention.
 
-## Step 3: Auto-merge Safe PRs
+## Step 4: Report
 
-For PRs categorized as "Merge":
+```markdown
+## Dependabot Triage Report
 
-1. Check if CI is passing:
-   ```bash
-   gh pr checks {number} --repo {repo}
-   ```
+| Repo | Action | PR | Package | Version |
+|------|--------|-----|---------|---------|
+| my-app | Merged | #42 | lodash | 4.17.21 → 4.17.22 |
+| my-app | Closed (superseded) | #40 | lodash | 4.17.21 → 4.17.21 |
+| my-api | Flagged (major) | #15 | express | 4.x → 5.x |
 
-2. If all green (or only pre-existing failures), enable auto-merge:
-   ```bash
-   gh pr merge {number} --repo {repo} --squash --auto --delete-branch
-   ```
-
-3. If CI is pending, enable auto-merge to trigger when checks pass:
-   ```bash
-   gh pr merge {number} --repo {repo} --squash --auto
-   ```
-
-## Step 4: Report via Slack
-
-Send a summary to Slack:
-
-```bash
-WEBHOOK_URL=$(cat .claude/hooks/notify-slack.sh 2>/dev/null | grep 'WEBHOOK_URL=' | head -1 | cut -d'"' -f2)
-if [ -z "$WEBHOOK_URL" ]; then
-  PARENT_ROOT=$(cd .. && git rev-parse --show-toplevel 2>/dev/null)
-  [ -n "$PARENT_ROOT" ] && WEBHOOK_URL=$(cat "$PARENT_ROOT/.claude/hooks/notify-slack.sh" 2>/dev/null | grep 'WEBHOOK_URL=' | head -1 | cut -d'"' -f2)
-fi
+**Summary**: {N} merged, {N} closed, {N} flagged for review, {N} rebased
 ```
 
-Message format — each PR must be a clickable link using `<url|#number title>` Slack mrkdwn syntax:
-```
-:package: Dependabot Triage Summary
+## Important Rules
 
-:white_check_mark: Merged:
-• repo: <https://github.com/owner/repo/pull/N|#N title>
-
-:no_entry_sign: Closed:
-• repo: <https://github.com/owner/repo/pull/N|#N title> — {reason}
-
-:arrows_counterclockwise: Rebased:
-• repo: <https://github.com/owner/repo/pull/N|#N title>
-
-:eyes: Needs review:
-• repo: <https://github.com/owner/repo/pull/N|#N title> — {why}
-```
-
-Build PR URLs from `https://github.com/{owner}/{repo}/pull/{number}`. Every PR reference in the Slack message MUST be a link.
-
-## Step 5: Output Summary
-
-Report to conversation what was done.
-
-## Guardrails
-
-- **Never merge major version bumps** without human approval
-- **Never merge if CI is failing** (unless pre-existing)
-- **Always squash merge** dependabot PRs
-- **Security updates get priority** — merge even if other checks are pending
-- In `--dry-run` mode, only report — take no action
+- **Never auto-merge major version bumps.** Flag for human review.
+- **Always check CI before merging.** Red CI = don't merge.
+- **Close superseded PRs** to reduce noise — Dependabot will recreate if needed.
+- **Rebase before closing stale PRs** — give them one chance to update.
+- **In dry-run mode**, report all actions but execute none.
