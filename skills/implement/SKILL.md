@@ -1,97 +1,80 @@
 ---
 name: implement
-description: "Pick up a Linear story and implement it end-to-end: load context, create branch, code the solution, validate, review, and open a PR. Use when user says 'implement LUC-XXX', 'pick up this story', 'work on this ticket', or 'build this feature'."
+description: "Pick up a ticket and implement it end-to-end: load context, create branch, code the solution, validate, review, and open a PR. Use when user says 'implement XXX', 'pick up this story', 'work on this ticket', or 'build this feature'."
 user_invocable: true
-argument-hint: "<LUC-XXX>"
+argument-hint: "<ticket-id>"
 ---
 
-# Implement a Linear Story
+# Implement a Ticket
 
-Pick up a Linear story, load relevant context, implement it end-to-end, then review and ship a PR.
+Pick up a ticket from the project tracker, load relevant context, implement it end-to-end, then review and ship a PR.
 
 ## Arguments
 
-Parse `$ARGUMENTS` as a Linear issue ID (e.g., `LUC-301`) or description to search for.
+Parse `$ARGUMENTS` as a ticket ID (e.g., `PROJ-301`) or description to search for.
 
 ## Steps
 
 ### Phase 1: Understand
 
-1. **Find the story**: Look up `$ARGUMENTS` in Linear. If no issue ID given, search Linear for matching issues.
+1. **Find the ticket**: Look up `$ARGUMENTS` in the project tracker. If no ID given, search for matching issues.
 
-2. **Load context**: Read these files based on what the story touches:
-   - Always: `.claude/context/product.md`, `.claude/reference/linear-keywords.md`
-   - If touching infra: `.claude/context/infrastructure.md`
-   - If touching auth: `.claude/context/auth-oauth.md`
-   - If touching deployment: `.claude/context/deployment.md`
-   - Read the service's own `CLAUDE.md` if it exists
+2. **Load context**: Read relevant files based on what the ticket touches:
+   - Always: project instructions (`CLAUDE.md`, `AGENTS.md`, or equivalent)
+   - Service-specific docs if they exist
+   - Related source files and tests
 
-3. **Understand the story**: Read the full issue description, acceptance criteria, and linked PRD/architecture docs.
+3. **Understand the ticket**: Read the full description, acceptance criteria, and linked design docs.
 
-4. **Update Linear**: Set issue status to `In Progress`.
+4. **Update status**: Set ticket status to `In Progress`.
 
-### Phase 2: Implement (in worktree)
+### Phase 2: Implement (in isolation)
 
-5. **Enter worktree for isolation**: Use the `EnterWorktree` tool so this implementation is fully isolated from any other in-progress work:
-   ```
-   EnterWorktree(name: "luc-{number}-{short-description}")
-   ```
-   This creates a fresh worktree in `.claude/worktrees/` with its own branch based on HEAD. Multiple `/implement` sessions can run in parallel without conflicts.
+5. **Create an isolated workspace**: Use a worktree or branch so this work is isolated from other in-progress changes.
 
-6. **Set up branch**: Inside the worktree, create the feature branch from `dev`:
+6. **Set up branch**: Create a feature branch from the base branch:
    ```bash
-   git fetch origin dev && git checkout -b founder/luc-{number}-{short-description} origin/dev
+   git fetch origin {base} && git checkout -b {prefix}/{ticket-id}-{short-description} origin/{base}
    ```
 
-7. **Implement**: Follow the acceptance criteria. Use Docker for local development. Follow standards in `.claude/context/dev-standards.md`.
+7. **Implement**: Follow the acceptance criteria. Work incrementally — build, test, commit in small steps.
 
-8. **Validate**: Run `make validate-{service}` to catch issues before committing.
+8. **Validate**: Run the project's validation/CI checks locally before committing.
 
 ### Phase 3: Review & Ship
 
-9. **Pre-landing review**: Run the review checklist from `.claude/skills/review/checklist.md` against the diff.
-   - Check the full diff: `git diff dev`
-   - **Pass 1 (CRITICAL)**: Secrets, `any` types, Terraform sync, security
-   - **Pass 2 (INFORMATIONAL)**: Console.log, dead code, TODOs, patterns
-   - If critical issues found, fix them before proceeding
-   - If only informational issues, note them for the PR description
+9. **Pre-landing review**: Review your own diff before shipping:
+   - **CRITICAL**: Secrets, type safety issues, security flaws
+   - **INFORMATIONAL**: Console.log, dead code, TODOs without tickets
+   - Fix critical issues before proceeding
 
-10. **Stage and commit**: Use conventional commit format with Linear magic words:
+10. **Stage and commit**: Use conventional commit format with ticket reference:
     ```
     {type}: {description}
 
-    closes LUC-{number}
+    closes {TICKET-ID}
 
     Co-Authored-By: Claude <noreply@anthropic.com>
     ```
-    For large changesets, split into bisectable commits (infra first, logic second, UI third).
 
 11. **Push and create PR**:
     ```bash
     git push -u origin $(git branch --show-current)
-    gh pr create --base dev --title "{type}: {summary}" --body "..."
+    gh pr create --base {base-branch} --title "{type}: {summary}" --body "..."
     ```
-    PR body must include: Summary, Linear reference (`closes LUC-XXX`), review findings, validation results, test plan.
+    PR body must include: summary, ticket reference, validation results, test plan.
 
 12. **Output the PR URL.**
 
-### Phase 4: Babysit to Merge-Readiness
+### Phase 4: Post-PR
 
-13. **Babysit the PR** using the `/babysit-pr` workflow (pre-flight, Copilot review, CI, Slack notification). See that skill for full details.
-
-### Phase 5: Cleanup
-
-14. **Exit the worktree**: After the PR is created and babysit is complete, exit and keep the worktree (the branch is on the remote now):
-    ```
-    ExitWorktree(action: "keep")
-    ```
-    The worktree can be removed after the PR is merged. If the implementation was abandoned, use `ExitWorktree(action: "remove")` instead.
+13. **Monitor the PR** through automated review and CI. Fix issues as they arise. See the `pr-lifecycle` pattern.
 
 ## Important Rules
 
-- **Never push directly to dev or main.** Always create a PR.
+- **Never push directly to the base branch.** Always create a PR.
 - **Never commit without running the review checklist.** It catches what validation misses.
-- **Never skip validation.** If `make validate-*` fails, fix the issues first.
-- **Always include Linear reference.** No commits without `LUC-XXX`.
+- **Never skip validation.** If local checks fail, fix the issues first.
+- **Always include ticket reference.** No commits without a tracker link.
 - **Never merge the PR.** Leave the final merge to the human.
 - **Ask for user confirmation** before creating the commit and PR.

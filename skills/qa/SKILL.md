@@ -1,6 +1,6 @@
 ---
 name: qa
-description: "Systematically QA test a web app or Tauri desktop app using MCP screenshot and interaction tools. Use when user says 'test the app', 'QA this', 'check for bugs', 'smoke test', or wants visual regression testing of a running application."
+description: "Systematically QA test a web app or desktop app using screenshot and interaction tools. Use when user says 'test the app', 'QA this', 'check for bugs', 'smoke test', or wants visual testing of a running application."
 argument-hint: "<url-or-app> [--quick] [--regression]"
 ---
 
@@ -11,23 +11,20 @@ You are a QA engineer. Test applications like a real user — click everything, 
 ## Arguments
 
 Parse `$ARGUMENTS`:
-- **URL or app name**: `http://localhost:3100`, `https://dev.lucitra.ai`, or `studio` (for Tauri app)
+- **URL or app name**: `http://localhost:3000`, `https://staging.example.com`, or an app identifier
 - **--quick**: 30-second smoke test (homepage + top 5 nav targets)
-- **--regression**: Compare against previous baseline in `.claude/qa-reports/`
+- **--regression**: Compare against previous baseline
 - **--scope "X"**: Focus on a specific area (e.g., `--scope "settings page"`)
 
 ## Setup
 
-Determine which MCP tools to use based on target:
+Determine which tools to use based on target:
 
-| Target | MCP Tools | Notes |
-|--------|-----------|-------|
-| `studio` or `tauri` | `mcp__lucitra-studio__tauri_*` | Tauri debug server on port 9333 |
-| `http://localhost:*` | `mcp__lucitra-studio__web_*` | Browser automation via Playwright |
-| Any URL | `mcp__lucitra-studio__web_*` | Browser automation via Playwright |
-| Desktop screenshot | `mcp__lucitra-studio__desktop_screenshot` | macOS native capture |
-
-**Pre-check for Tauri:** Call `tauri_info` first. If it returns "Could not connect", tell the user to start the app with `make start-desktop`.
+| Target | Tools | Notes |
+|--------|-------|-------|
+| Web URL | Browser automation (Playwright, Puppeteer, MCP) | Screenshot + interact |
+| Desktop app | Platform-specific tools | Native capture + interaction |
+| Mobile | Device emulation | Responsive testing |
 
 ---
 
@@ -48,145 +45,81 @@ Run full mode, then compare against previous baseline. Report: fixed issues, new
 
 ### Phase 1: Orient
 
-**For web apps:**
-```
-web_screenshot → see landing page
-web_get_info → get URL, title, text, links
-```
+1. **Navigate to the target** and take an initial screenshot
+2. **Map the navigation**: Identify all top-level nav items, sidebar links, tabs
+3. **Note the layout**: Is it a dashboard? CRUD app? Content site? This determines the test strategy
 
-**For Tauri app:**
-```
-tauri_screenshot → see current state
-tauri_info → get URL, title, text, clickable elements
-```
+### Phase 2: Explore (page by page)
 
-Note the framework (Next.js, React, etc.) and navigation structure.
+For each reachable page/view:
 
-### Phase 2: Explore
+1. **Navigate** to the page
+2. **Screenshot** the default state
+3. **Check visual issues**: layout broken? Elements overlapping? Text truncated? Empty states handled?
+4. **Check interactivity**: Click buttons, fill forms, open modals, trigger dropdowns
+5. **Check error states**: Submit empty forms, enter invalid data, trigger edge cases
+6. **Check responsive**: Resize viewport to mobile (375px), tablet (768px), desktop (1280px)
+7. **Log findings** with severity and screenshot evidence
 
-Visit pages systematically. At each page:
+### Phase 3: Cross-Cutting Checks
 
-1. **Screenshot** — capture current state
-2. **Get info** — read text, find interactive elements
-3. **Click interactive elements** — do buttons work? Do links navigate?
-4. **Check states** — empty state, loading, error, overflow
-5. **Test forms** — fill and submit, test empty/invalid/edge cases
+After page-by-page testing:
 
-**Quick mode:** Only test homepage + top 5 navigation targets. Skip detailed form testing.
+- [ ] **Auth flows**: Login, logout, session expiry, protected routes
+- [ ] **Navigation**: All links work, back button behavior, breadcrumbs
+- [ ] **Loading states**: Skeleton screens, spinners, progressive loading
+- [ ] **Empty states**: What shows when there's no data?
+- [ ] **Error handling**: API failures, network errors, 404 pages
+- [ ] **Accessibility**: Tab navigation, focus indicators, contrast, screen reader basics
+- [ ] **Console**: Any JavaScript errors or warnings?
 
-**Depth judgment:** Spend more time on core features (dashboard, main workflows) and less on secondary pages (settings, about).
+### Phase 4: Report
 
-### Phase 3: Document Issues
-
-For each issue found:
-
-```markdown
-### ISSUE-{NNN}: {title}
-
-**Severity:** Critical | High | Medium | Low
-**Category:** Visual | Functional | UX | Content | Performance | Accessibility
-**Page:** {URL or view name}
-
-**Steps to reproduce:**
-1. {step}
-2. {step}
-3. {step}
-
-**Expected:** {what should happen}
-**Actual:** {what actually happens}
-
-**Evidence:** {screenshot description — take before/after screenshots}
-```
-
-Take screenshots as evidence using the appropriate MCP tool. For interactive bugs, capture before and after states.
-
-### Phase 4: Health Score
-
-Compute each category (0-100), then weighted average:
-
-| Category | Weight | Scoring |
-|----------|--------|---------|
-| Functional | 25% | -25 per critical, -15 per high, -8 per medium |
-| Visual | 15% | -25 per critical, -15 per high, -8 per medium |
-| UX | 20% | -25 per critical, -15 per high, -8 per medium |
-| Performance | 15% | -25 per critical, -15 per high, -8 per medium |
-| Accessibility | 15% | -25 per critical, -15 per high, -8 per medium |
-| Content | 10% | -25 per critical, -15 per high, -8 per medium |
-
-Each category starts at 100. Minimum 0.
-
-### Phase 5: Report
-
-Output the full report to the conversation. Also save a baseline JSON to `.claude/qa-reports/`:
-
-```bash
-mkdir -p .claude/qa-reports
-```
-
-Write `baseline-{target}-{date}.json`:
-```json
-{
-  "date": "YYYY-MM-DD",
-  "target": "<url-or-app>",
-  "healthScore": N,
-  "issues": [{"id": "ISSUE-001", "title": "...", "severity": "...", "category": "..."}],
-  "categoryScores": {"functional": N, "visual": N, "ux": N, "performance": N, "accessibility": N, "content": N}
-}
-```
-
-**Regression mode:** Load the most recent baseline for this target. Compare scores, list fixed/new issues, show delta.
-
----
-
-## Report Format
+Produce a structured report:
 
 ```markdown
-# QA Report: {target}
-**Date:** {date} | **Mode:** {full|quick|regression} | **Duration:** {time}
-**Health Score: {N}/100** {emoji based on score: 90+ green, 70-89 yellow, <70 red}
+# QA Report: {app name}
+**Date**: {date}
+**URL**: {url}
+**Mode**: {full/quick/regression}
 
-## Summary
-| Category | Score | Issues |
-|----------|-------|--------|
-| Functional | {N} | {count} |
-| Visual | {N} | {count} |
-| ... | ... | ... |
+## Health Score: {X}/10
 
-## Top 3 Things to Fix
-1. {highest severity issue}
-2. {next}
-3. {next}
+## Issues Found
 
-## Issues
-{detailed issues from Phase 3}
+### Critical (blocks release)
+- [ ] {description} — {screenshot reference}
 
-## Regression (if applicable)
-{comparison with baseline}
+### Major (should fix before release)
+- [ ] {description} — {screenshot reference}
+
+### Minor (cosmetic, fix when convenient)
+- [ ] {description} — {screenshot reference}
+
+## Pages Tested
+| Page | Status | Issues |
+|------|--------|--------|
+| /dashboard | Pass | 0 |
+| /settings | Fail | 2 |
+
+## Screenshots
+{list of saved screenshots with descriptions}
 ```
 
----
+### Health Score Rubric
 
-## Framework-Specific Checks
-
-### Next.js (Lucitra apps)
-- Hydration errors in console
-- Client-side navigation works (click links, don't just navigate directly)
-- Loading states render correctly
-- Dark mode consistency (zinc-950 theme)
-
-### Tauri (Lucitra Studio)
-- Debug server responds on port 9333
-- Window resizing doesn't break layout
-- Platform-specific features work (shell commands, file system access)
-- Settings persist across navigation
-
----
+| Score | Meaning |
+|-------|---------|
+| 9-10 | Ship-ready. No issues or only cosmetic nits |
+| 7-8 | Good. Minor issues that don't block users |
+| 5-6 | Needs work. Functional issues present |
+| 3-4 | Significant issues. Key flows broken |
+| 1-2 | Critical. App is largely unusable |
 
 ## Important Rules
 
-1. **Test as a user, not a developer.** Never read source code during QA.
-2. **Every issue needs a screenshot.** No exceptions.
-3. **Verify before documenting.** Retry once to confirm reproducibility.
-4. **Never include credentials.** Use `[REDACTED]` for sensitive data.
-5. **Depth over breadth.** 5 well-documented issues > 20 vague ones.
-6. **Check after every interaction.** Silent failures are still bugs.
+- **Screenshot everything.** Issues without visual evidence are hard to reproduce.
+- **Test as a user, not a developer.** Click what looks clickable. Fill what looks fillable.
+- **Don't fix issues during QA.** Document them. Fixing during testing biases the report.
+- **Test the unhappy path.** Empty states, errors, edge cases are where bugs hide.
+- **Clean up screenshots** after the report is reviewed — don't leave hundreds of PNGs around.
