@@ -1,0 +1,18 @@
+name: Sync skills to agent-company
+
+on:
+  push:
+    branches: [main]
+    paths: ['skills/**']
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sync on agent-company
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.COMPANY_SYNC_TOKEN }}" \
+            https://api.github.com/repos/lucitra/lucitra-agent-company/dispatches \
+            -d '{"event_type":"sync-skills","client_payload":{"source":"lucitra-skills"}}'
