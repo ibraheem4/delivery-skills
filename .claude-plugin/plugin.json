@@ -1,5 +1,9 @@
 {
   "name": "lucitra-skills",
   "description": "Lucitra delivery operations: deploy, cloud-build, qa, npm-publish, triage-dependabot, create-plan, retro, reset and sunset",
-  "author": { "name": "Lucitra", "url": "https://github.com/lucitra" }
+  "version": "0.1.0",
+  "author": {
+    "name": "Lucitra",
+    "url": "https://github.com/lucitra"
+  }
 }
