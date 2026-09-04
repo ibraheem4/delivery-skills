@@ -1,9 +1,9 @@
 {
   "name": "delivery-skills",
   "description": "Delivery operations: deploy, cloud-build, qa, npm-publish, triage-dependabot, create-plan, retro, reset and sunset",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
-    "name": "Acme",
-    "url": "https://github.com/acme"
+    "name": "Ibraheem Abdul-Malik",
+    "url": "https://github.com/ibraheem4"
   }
 }
