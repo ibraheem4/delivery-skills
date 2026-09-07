@@ -1,3 +1,8 @@
+---
+name: cloud-build
+description: Use when checking Google Cloud Build status for a project service — build progress, why a build failed, build logs, or watching a build to completion. Triggers on a named service such as marketing, validate or mcp-server.
+---
+
 # Cloud Build Monitor
 
 Monitor Google Cloud Build status for Acme services. Check build progress, view logs, and diagnose failures.
