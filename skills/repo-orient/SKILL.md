@@ -10,7 +10,7 @@ Map the smallest reliable path from a requested outcome to the code and contract
 ## Workflow
 
 1. Resolve the exact repository, branch, and requested outcome. Record whether the worktree is clean without modifying it.
-2. Read every applicable `AGENTS.md` and repository authority file before interpreting code. For organization-wide decisions read wherever they are recorded; for product questions read the product's own docs (and `AGENTS.md`, the same file under two names — edit both). `~/Projects/lucitra-core` is frozen reference and does not govern.
+2. Read every applicable `AGENTS.md` and repository authority file before interpreting code. For organization-wide decisions read wherever they are recorded; for product questions read the product's own docs (and `AGENTS.md`, the same file under two names — edit both). A repository the workspace marks as frozen reference does not govern, however authoritative it reads.
 3. For an existing capability, search `{{code_asset_registry}}` before proposing anything new. Treat the registry as discovery memory, then verify its dated claims against the current checkout.
 4. Trace the requested behavior vertically: entry point, UI or API, domain/service layer, persistence, integration, configuration, and tests. Skip irrelevant layers.
 5. Classify similar implementations as:
