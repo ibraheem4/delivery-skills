@@ -24,3 +24,20 @@ for skill in skills/*/; do
   ln -sf "$(pwd)/$skill" ~/.claude/skills/"$name"
 done
 ```
+
+## Governance
+
+Two chains, each with separation of duties. Neither replaces the judgement at the end of it;
+both exist so that judgement is made on evidence somebody else can re-check.
+
+**Trust** — `trust-posture-review` → `evidence-investigation` → `remediation-review` →
+`founder-brief`. Each step cites the one before it and is verified by someone other than its
+author.
+
+**Delivery** — `shape-work` → `repo-orient` → `implement-story` → `delivery-review` →
+`release-readiness`. A request becomes a bounded work order, the repository is read before it is
+changed, the change is made in an isolated worktree, reviewed read-only against the work order,
+and only then judged fit to ship.
+
+Both moved here from [agent-skills](https://github.com/ibraheem4/agent-skills) — they are
+delivery operations, which is what this repo is for.
